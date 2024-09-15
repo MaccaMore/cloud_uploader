@@ -18,7 +18,7 @@ file_path=$1
 destination=$2
 
 # Check if AWS CLI is installed
-if [ ! command -v aws &> /dev/null ]
+if [ $(which aws) == *"not"* ]
 then
     echo "AWS CLI could not be found. Please install AWS CLI."
     exit 1
@@ -33,7 +33,6 @@ exit 1
 fi
 
 # check cloud upload profile exists in credentials file
-
 if [ -z "$(grep "s3-access" ~/.aws/credentials)" ]
 then
 echo "Please create a AWS profile using the command: aws configure --profile s3-access"
@@ -41,4 +40,4 @@ exit 1
 fi
 
 # check if destination bucket exists
- aws s3 ls s3://$destination
+aws s3 ls s3://$destination --profile s3-access
