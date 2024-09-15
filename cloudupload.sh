@@ -1,6 +1,35 @@
 !# /bin/bash
 # User should enter name of file, location to upload to
 
+if [ $1 == "setup" ]
+then
+setup();
+fi
+
+if [ $1 == "cp" ]
+then
+cp();
+fi
+
+# do setup
+
+setup(){
+# Check if AWS CLI is installed
+if [ $(which aws) == *"not"* ]
+then
+    echo "AWS CLI could not be found."
+    read -p "Install AWS CLI? (y/n)" install
+    if [ $install == "y"]
+    then
+    curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+    sudo installer -pkg AWSCLIV2.pkg -target /
+    fi
+
+
+
+fi
+}
+
 if [ $# -eq 0 ]
 then
     echo "Syntax to use this script is: cloudupload.sh file_path destination"
@@ -17,12 +46,6 @@ fi
 file_path=$1
 destination=$2
 
-# Check if AWS CLI is installed
-if [ $(which aws) == *"not"* ]
-then
-    echo "AWS CLI could not be found. Please install AWS CLI."
-    exit 1
-fi
 
 # check logged in user
 # ~./aws/credentials file should be present with cloud-upload credentials
@@ -41,3 +64,9 @@ fi
 
 # check if destination bucket exists
 aws s3 ls s3://$destination --profile s3-access
+
+
+echo "Uploading $filename to $destination..."
+aws s3 cp $filename $destination
+
+echo `aws
