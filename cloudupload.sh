@@ -1,7 +1,9 @@
 #!/bin/bash
+install_location="~/.cloudupload"
 
 setup(){
     # Check if AWS CLI is installed
+    # I think there should be a better way to check if AWS CLI is installed
     if [ $(which aws) == *"not found"* ]
     then
         echo "AWS CLI could not be found."
@@ -20,97 +22,94 @@ setup(){
     read -p "Do you want to set a default bucket name? (y/n)" default
     if [ $default == "y" ]
     then
-        if [ ! -d ~/.cloudupload ]
-        then
-        mkdir ~/.cloudupload
-        fi
-
-
-        if [ ! -f ~/.cloudupload/default ]
-        then
-        touch ~/.cloudupload/default
-        fi
-
-        read -p "Enter default bucket name: " bucket_name
-        echo "default_bucket:$bucket_name" > ~/.cloudupload/default
-        fi
+    read -p "Enter default bucket name: " bucket_name
+    echo "default_bucket:$bucket_name" > "$install_location/default"
+    setdefault "$bucket_name"
+    fi
 }
 
 set-default(){
-    if [ ! -f ~/.cloudupload/default ]
+    if [ ! -f "$install_location/default" ]
     then
-    mkdir ~/.cloudupload
-    touch ~/.cloudupload/default
+    mkdir -p "$install_location"
+    touch "$install_location/default"
     fi
-    echo "default_bucket:
-    $3" > ~/.cloudupload/default
+    echo "default_bucket:$1" > "$install_location/default"
 }
 
 
-cp(){
-    if [ $# -lt 2 ]
-    then
-    echo "Syntax for uploading a file: cloudupload <command> <file_path> <destination>"
-    exit 1
+cp() {
+    # Check if the file path is provided
+    if [ $# -lt 1 ]; then
+        echo "Syntax for uploading a file: cloudupload cp <file_path> [destination]"
+        exit 1
     fi
 
-    # Check file exists
-    if [ ! -f $1 ]
-    then
-    echo "File does not exist. Please enter a valid file path."
-    exit 1
+    # Check if the file exists
+    if [ ! -f "$1" ]; then
+        echo "File does not exist. Please enter a valid file path."
+        exit 1
     fi
 
     file_path=$1
     destination=$2
-    default_bucket=$(cat ~/.cloudupload/default | cut -d ":" -f 2)
+    default_bucket=""
 
-    if [ $# -lt 3 && -f ~/.cloudupload/default ];then
-    destination=$default_bucket
-    else
-    echo "Please enter a destination bucket name. Set default bucket using cloudupload set-default <bucket_name>"
-    exit 1
+    # Check if the default bucket file exists and get the bucket name from default file
+    if [ -f "$install_location/default" ]; then
+        default_bucket=$(cat "$install_location/default" | cut -d ":" -f 2 | tr -d ' ')
     fi
 
-    # If destination bucket provided, and it starts with a /, set destination to defaultbucket/destination
-    if [ $# -eq 3 && $3 == "/"* ];then
-    destination=$default_bucket/$destination
+    # If no destination bucket is provided, fall back to the default bucket
+    if [ -z "$destination" ] && [ -n "$default_bucket" ]; then
+        destination=$default_bucket
+        echo "Using default bucket: $default_bucket"
+    elif [ -z "$destination" ]; then
+        echo "Please provide a destination bucket or set a default bucket using cloudupload set-default <bucket_name>"
+        exit 1
     fi
 
-    # Check if destination bucket exists
-    # if not, prompt creation
-    if [ -z "$(aws s3 ls | grep ~/.cloudupload/default)" ];then
-    echo "Bucket does not exist. Create bucket? (y/n)"
-    read -p "Create bucket? (y/n)" create
-    if [ $create == "y" ];then
-    aws s3 mb s3://$destination --profile s3-access
-    fi
+    # Check if destination starts with '/' and prepend the default bucket
+    if [[ $destination == /* ]]; then
+        destination="$default_bucket$destination"
     fi
 
-    # check cloud upload profile exists in credentials file
-    if [ -z "$(grep "s3-access" ~/.aws/credentials)" ]
-    then
-    echo "Please connect an AWS profile using the command: cloudupload setup"
-    exit 1
+    # Check if the destination bucket exists using AWS CLI (this assumes AWS CLI is set up)
+    if ! aws s3 ls "s3://$destination" > /dev/null 2>&1; then
+        echo "Bucket does not exist. Create bucket? (y/n)"
+        read create
+        if [ "$create" == "y" ]; then
+            aws s3 mb "s3://$destination" --profile s3-access
+        else
+            echo "Exiting without creating bucket."
+            exit 1
+        fi
     fi
 
-    echo "Uploading $filename to $destination..."
-    aws s3 cp $filename $destination --profile s3-access
+    # Ensure the AWS profile 's3-access' exists in the credentials
+    if ! grep -q "\[s3-access\]" ~/.aws/credentials; then
+        echo "Please connect an AWS profile using the command: cloudupload setup"
+        exit 1
+    fi
+
+    # Upload the file to the destination
+    echo "Uploading $file_path to s3://$destination..."
+    aws s3 cp "$file_path" "s3://$destination" --profile s3-access
 }
 
-if [ $1 == "setup" ]
-then
-setup();
-fi
-
-if [ $1 == "set-default" ]
-then
-set-default();
-fi
-
-if [ $1 == "cp" ]
-then
-cp();
-else
-echo "Syntax is: cloudupload <command> <file_path> <destination>"
-fi
+case "$1" in
+set-default)
+    # Call the set-default function with the provided bucket name
+    set-default "$2"
+    ;;
+setup)
+    # Call the setup function to walk through setup
+    setup
+    ;;
+cp)
+    cp "$2" "$3"
+    ;;
+*)
+    echo "Usage: cloudupload {set-default <bucket-name>|setup|cp <file_path> [destination]}"
+    ;;
+    esac
