@@ -4,11 +4,11 @@ install_location="~/.cloudupload"
 setup(){
     # Check if AWS CLI is installed
     # I think there should be a better way to check if AWS CLI is installed
-    if [ $(which aws) == *"not found"* ]
+    if [ ! command -v aws ]
     then
         echo "AWS CLI could not be found."
         read -p "Install AWS CLI? (y/n)" install
-        if [ $install == "y"]
+        if [ $install == "y" ]
         then
         curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
         sudo installer -pkg AWSCLIV2.pkg -target /
@@ -75,7 +75,8 @@ cp() {
     fi
 
     # Check if the destination bucket exists using AWS CLI (this assumes AWS CLI is set up)
-    if ! aws s3 ls "s3://$destination" > /dev/null 2>&1; then
+    if [ ! aws s3 ls "s3://$destination" > /dev/null 2>&1 ]; 
+        then
         echo "Bucket does not exist. Create bucket? (y/n)"
         read create
         if [ "$create" == "y" ]; then
@@ -87,7 +88,8 @@ cp() {
     fi
 
     # Ensure the AWS profile 's3-access' exists in the credentials
-    if ! grep -q "\[s3-access\]" ~/.aws/credentials; then
+    if [ ! grep -q '/s3-access/' ~/.aws/credentials ];
+    then
         echo "Please connect an AWS profile using the command: cloudupload setup"
         exit 1
     fi
@@ -99,11 +101,9 @@ cp() {
 
 case "$1" in
 set-default)
-    # Call the set-default function with the provided bucket name
     set-default "$2"
     ;;
 setup)
-    # Call the setup function to walk through setup
     setup
     ;;
 cp)
